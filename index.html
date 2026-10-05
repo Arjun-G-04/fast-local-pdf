@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Instant, 100% in-browser PDF unlocker and merger. No file uploads, completely private.">
+<title>fast local pdf</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--b:#fff;--c:#fff;--t:#000;--m:#555;--bd:#ccc;--eb:#f4f4f4}
+@media(prefers-color-scheme:dark){:root{--b:#000;--c:#111;--t:#fff;--m:#888;--bd:#333;--eb:#1a1a1a}}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--b);color:var(--t);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;line-height:1.4}
+header{text-align:center;margin-bottom:16px}
+h1{font-size:1.35rem;font-weight:700;letter-spacing:-0.01em}
+p.s{font-size:0.8rem;color:var(--m);margin-top:2px}
+main{width:100%;max-width:440px;background:var(--c);border:1px solid var(--bd);border-radius:4px;padding:20px}
+input[type="radio"]{display:none}
+.nav{display:flex;gap:4px;background:var(--b);padding:3px;border-radius:4px;margin-bottom:16px;border:1px solid var(--bd)}
+.tab{flex:1;text-align:center;padding:6px;font-size:0.82rem;font-weight:600;color:var(--m);cursor:pointer;border-radius:2px}
+#tu:checked~.nav .lu,#tm:checked~.nav .lm{background:var(--t);color:var(--b)}
+.p{display:none}
+#tu:checked~.pu,#tm:checked~.pm{display:flex;flex-direction:column;gap:12px}
+form,.f{display:flex;flex-direction:column;gap:12px}
+.f{gap:4px}
+label{font-size:0.8rem;font-weight:600}
+.h{font-size:0.72rem;color:var(--m)}
+input[type="text"],input[type="file"]{width:100%;padding:8px 10px;font-size:0.85rem;font-family:inherit;color:var(--t);background:var(--b);border:1px solid var(--bd);border-radius:4px;outline:none}
+input[type="file"]{padding:5px;cursor:pointer}
+input[type="file"]::file-selector-button{padding:3px 8px;border:1px solid var(--bd);background:var(--c);color:var(--t);border-radius:2px;cursor:pointer;font:inherit;font-size:0.75rem}
+input:focus{border-color:var(--t)}
+button{padding:9px 12px;font-size:0.85rem;font-weight:600;font-family:inherit;color:var(--b);background:var(--t);border:1px solid var(--t);border-radius:4px;cursor:pointer}
+button:hover{opacity:0.85}
+.err{padding:8px 12px;background:var(--eb);color:var(--t);border:1px solid var(--bd);border-radius:4px;font-size:0.78rem;margin-bottom:12px}
+</style>
+</head>
+<body>
+<header>
+<h1>fast local pdf</h1>
+<p class="s">instant, 100% in-browser</p>
+</header>
+<main>
+<input type="radio" id="tu" checked aria-label="PDF Unlocker">
+<input type="radio" id="tm" aria-label="PDF Merger">
+<nav class="nav">
+<label for="tu" class="tab lu">PDF Unlocker</label>
+<label for="tm" class="tab lm">PDF Merger</label>
+</nav>
+<div id="err" class="err" style="display:none" role="alert"></div>
+<section class="p pu">
+<form id="ufm">
+<div class="f">
+<label for="uf">Select PDF File</label>
+<input type="file" id="uf" accept=".pdf,application/pdf" required>
+<span class="h">Removes print/copy restrictions</span>
+</div>
+<button type="submit">Unlock &amp; Download PDF</button>
+</form>
+</section>
+<section class="p pm">
+<form id="mfm">
+<div class="f">
+<label for="mf">Select PDF Files to Merge</label>
+<input type="file" id="mf" accept=".pdf,application/pdf" multiple required>
+<span class="h">Merged in order of selection</span>
+</div>
+<div class="f">
+<label for="mo">Output Filename</label>
+<input type="text" id="mo" value="merged.pdf" placeholder="merged.pdf">
+</div>
+<button type="submit">Merge &amp; Download PDF</button>
+</form>
+</section>
+</main>
+<script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
+<script>
+(()=>{
+  const errBox = document.getElementById('err');
+  const showError = msg => { errBox.textContent = msg; errBox.style.display = 'block'; };
+  const download = (bytes, name) => {
+    const url = URL.createObjectURL(new Blob([bytes], {type:'application/pdf'}));
+    const a = Object.assign(document.createElement('a'), {href:url, download:name});
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  document.getElementById('ufm').onsubmit = async e => {
+    e.preventDefault();
+    errBox.style.display = 'none';
+    if (!window.PDFLib) return showError('PDF engine loading. Please check connection.');
+    const file = document.getElementById('uf').files[0];
+    if (!file) return;
+    try {
+      const doc = await PDFLib.PDFDocument.load(await file.arrayBuffer(), {ignoreEncryption:true});
+      download(await doc.save(), file.name.replace(/\.pdf$/i, '') + '_unlocked.pdf');
+    } catch (err) { showError(err.message || 'Failed to unlock PDF.'); }
+  };
+
+  document.getElementById('mfm').onsubmit = async e => {
+    e.preventDefault();
+    errBox.style.display = 'none';
+    if (!window.PDFLib) return showError('PDF engine loading. Please check connection.');
+    const files = Array.from(document.getElementById('mf').files || []);
+    if (files.length < 2) return showError('Please select at least 2 PDF files to merge.');
+    try {
+      const merged = await PDFLib.PDFDocument.create();
+      for (const f of files) {
+        const doc = await PDFLib.PDFDocument.load(await f.arrayBuffer(), {ignoreEncryption:true});
+        (await merged.copyPages(doc, doc.getPageIndices())).forEach(p => merged.addPage(p));
+      }
+      let name = document.getElementById('mo').value.trim() || 'merged.pdf';
+      if (!name.endsWith('.pdf')) name += '.pdf';
+      download(await merged.save(), name);
+    } catch (err) { showError(err.message || 'Failed to merge PDFs.'); }
+  };
+})();
+</script>
+</body>
+</html>
