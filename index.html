@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Instant, 100% in-browser PDF unlocker and merger. No file uploads, completely private.">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23000'/><path d='M10 8h8l6 6v10H10z' fill='%23fff'/><path d='M18 8v6h6' fill='%23ccc'/></svg>">
 <title>fast local pdf</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -71,7 +74,6 @@ button:hover{opacity:0.85}
 </form>
 </section>
 </main>
-<script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
 <script>
 (()=>{
   const errBox = document.getElementById('err');
@@ -83,13 +85,32 @@ button:hover{opacity:0.85}
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  let enginePromise = null;
+  const loadEngine = () => {
+    if (!enginePromise) {
+      enginePromise = new Promise((resolve, reject) => {
+        if (window.PDFLib) return resolve(window.PDFLib);
+        const s = document.createElement('script');
+        s.src = './pdf-lib.min.js';
+        s.onload = () => resolve(window.PDFLib);
+        s.onerror = () => { enginePromise = null; reject(new Error('Failed to load local PDF engine.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return enginePromise;
+  };
+
+  ['pointerdown', 'focusin', 'dragenter'].forEach(evt => {
+    window.addEventListener(evt, loadEngine, { once: true, passive: true });
+  });
+
   document.getElementById('ufm').onsubmit = async e => {
     e.preventDefault();
     errBox.style.display = 'none';
-    if (!window.PDFLib) return showError('PDF engine loading. Please check connection.');
     const file = document.getElementById('uf').files[0];
     if (!file) return;
     try {
+      const PDFLib = await loadEngine();
       const doc = await PDFLib.PDFDocument.load(await file.arrayBuffer(), {ignoreEncryption:true});
       download(await doc.save(), file.name.replace(/\.pdf$/i, '') + '_unlocked.pdf');
     } catch (err) { showError(err.message || 'Failed to unlock PDF.'); }
@@ -98,10 +119,10 @@ button:hover{opacity:0.85}
   document.getElementById('mfm').onsubmit = async e => {
     e.preventDefault();
     errBox.style.display = 'none';
-    if (!window.PDFLib) return showError('PDF engine loading. Please check connection.');
     const files = Array.from(document.getElementById('mf').files || []);
     if (files.length < 2) return showError('Please select at least 2 PDF files to merge.');
     try {
+      const PDFLib = await loadEngine();
       const merged = await PDFLib.PDFDocument.create();
       for (const f of files) {
         const doc = await PDFLib.PDFDocument.load(await f.arrayBuffer(), {ignoreEncryption:true});
